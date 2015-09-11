@@ -66,7 +66,7 @@ runFeed u = do
   a <- getFeed u
   case a of
     [] -> feed def u
-    l:_ -> feed def u -- feed def u
+    l:_ -> feed def u
 
 main :: IO ()
 main = getArgs >>= mapM_ runFeed >> getLine >> pure ()

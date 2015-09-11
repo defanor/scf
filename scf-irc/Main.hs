@@ -17,13 +17,17 @@ import Data.HashMap.Strict as H hiding (map, filter)
 
 import qualified Data.Text as T
 
-import Data.Attoparsec.Text as A
+import Data.Attoparsec.Text as A hiding (take)
 import Data.Char
 
 import Network.SimpleIRC
 
 import System.IO
+import Data.List
 
+import Data.Time.Clock.POSIX
+
+import Control.Concurrent
 
 
 data Msg = Msg { who :: String
@@ -65,6 +69,25 @@ onMsg = Privmsg $ \irc m -> case mNick m of
     hFlush stdout
   Nothing -> putStrLn $ show m
 
+onDisconnect :: IrcEvent
+onDisconnect = Disconnect $ \irc -> reconnect' irc
+  where
+    reconnect' irc = do
+      r <- reconnect irc
+      case r of
+        Left err -> do
+          threadDelay $ 30 * 10 ^ 6
+          reconnect' irc
+        Right irc -> pure ()
+
+onNumeric :: IrcEvent
+onNumeric = Numeric $ \irc m -> case (mCode m) of
+  "433" -> do
+    nick <- getNickname irc
+    t <- getPOSIXTime
+    sendCmd irc . MNick $ BS.append nick . BS.pack . take 8 . drop 6 . show $ fromEnum t
+  _ -> return ()
+
 
 main :: IO ()
 main = do
@@ -73,7 +96,7 @@ main = do
     (host:port:tls:nick:channels) -> do
       irc' <- connect (IrcConfig host (read port) (read tls)
                        nick Nothing nick nick channels
-                       [onMsg] "scf-irc" (pure "time") 240000000) True False
+                       [onMsg, onDisconnect, onNumeric] "scf-irc" (pure "time") (3*10^8)) True False
       case irc' of
         Left err -> putStrLn $ show err
         Right irc -> writer irc PBS.stdin

@@ -18,8 +18,8 @@ Based on the plans described in
 ## Programs ##
 
 Currently those are prototypes (i.e., are rather messy and there's not
-much of error handling): say, everything will break on disconnect. Not
-for real usage yet, going to refine once will be sure about format.
+much of error handling), not for real usage yet; going to refine once
+will be sure about the format.
 
 ### scf-json ###
 

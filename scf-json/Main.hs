@@ -1,13 +1,10 @@
-{-# LANGUAGE ImpredicativeTypes #-}
-{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE OverloadedStrings #-}
-import Data.Aeson hiding (decode)
+import Data.Aeson
 import Pipes
 import Pipes.Aeson
 import Pipes.Safe
 import Pipes.Safe.Prelude as PSP
 import qualified Pipes.ByteString as PBS
-import Control.Monad.State.Strict
 import Pipes.Attoparsec
 import qualified Data.ByteString.Lazy.Char8 as BL
 import qualified Data.ByteString.Char8 as BS
@@ -27,13 +24,15 @@ import Data.Char
 import System.IO
 
 import Control.Lens (view)
-import Pipes.Aeson.Unchecked as AU (decoded)
+import qualified Pipes.Aeson.Unchecked as AU (decoded)
 import Pipes.Concurrent
-import Control.Concurrent (ThreadId)
+import Control.Concurrent (ThreadId, killThread)
 
 import qualified GHC.IO.Exception as G
 import Foreign.C.Error (Errno(Errno), ePIPE)
 import Control.Exception as E (throwIO, try)
+
+
 
 keyFilter :: (Value -> Bool) -> Object -> T.Text -> Maybe Object
 keyFilter f o k = H.lookup k o >>=
@@ -82,24 +81,7 @@ filter' _ o = pure o
 
 
 
-
-inp :: MonadIO m => Producer PBS.ByteString m r ->
-       (Producer Object m (Either (DecodingError, Producer PBS.ByteString m r) r))
-inp = view AU.decoded
-
-readFile' :: MonadSafe m => FilePath -> Producer' BS.ByteString m ()
-readFile' fp = for (PSP.readFile fp) (yield . BS.pack)
-
-fromFile :: (MonadIO m, MonadSafe m) => FilePath ->
-            Producer Object m (Either (DecodingError, Producer BS.ByteString m ()) ())
-fromFile = inp . readFile'
-
-runConsumer :: Output Object -> String -> IO ThreadId
-runConsumer o p = forkIO $ do
-  runSafeT $ runEffect $ (fromFile p >> pure ()) >-> toOutput o
-  performGC
-
-prettyOut :: MonadIO m => Consumer' Object m ()
+prettyOut :: MonadIO m => Consumer' Object m (Either e ())
 prettyOut = go
   where
     go = do
@@ -111,20 +93,32 @@ prettyOut = go
             Left (G.IOError { G.ioe_type  = G.ResourceVanished
                             , G.ioe_errno = Just ioe })
                  | Errno ioe == ePIPE
-                     -> return ()
+                     -> return $ Right ()
             Left  e  -> liftIO (throwIO e)
             Right () -> go
 
-merge :: [String] -> IO ()
+inp :: MonadIO m => Producer PBS.ByteString m r ->
+       (Producer Object m (Either (DecodingError, Producer PBS.ByteString m r) r))
+inp = view AU.decoded
+
+fromFile :: (MonadIO m, MonadSafe m) => FilePath ->
+            Producer Object m (Either (DecodingError, Producer BS.ByteString m ()) ())
+fromFile fp = inp $ for (PSP.readFile fp) (yield . BS.pack)
+
+runConsumer :: Output o -> (Producer o (SafeT IO) (Either e r)) -> IO ThreadId
+runConsumer o p = forkIO $ do
+  runSafeT $ runEffect $ (p >> pure ()) >-> toOutput o
+  performGC
+
+merge :: [String] -> IO (Either e ())
 merge pipes = do
   (o, i) <- spawn Unbounded
-  forkIO $ do
-    runSafeT $ runEffect $ (inp PBS.stdin >> pure ()) >-> toOutput o
-    performGC
-  mapM_ (runConsumer o) pipes
-  runEffect $ fromInput i >-> prettyOut
+  tids <- mapM (runConsumer o) $ inp PBS.stdin : map fromFile pipes
+  runEffect $ (fromInput i >> pure (Right ())) >-> prettyOut
+  performGC
+  pure $ Right ()
 
-process :: Monad m => [T.Text] -> Pipe Object Object m ()
+process :: Monad m => [T.Text] -> Pipe Object Object m (Either e ())
 process args = do
   obj <- await
   case filter' args $ translate args obj of
@@ -136,8 +130,9 @@ process args = do
 main :: IO ()
 main = do
   args' <- getArgs
-  case args' of
+  r <- case args' of
     "merge":xs -> merge xs
-    _ -> do
-      let args = map T.pack args'
-      runEffect $ (inp PBS.stdin >> pure ()) >-> process args >-> prettyOut
+    _ -> runEffect $ (inp PBS.stdin) >-> process (map T.pack args') >-> prettyOut
+  case r of
+    Left err -> main -- parse error, start over
+    Right () -> pure ()
