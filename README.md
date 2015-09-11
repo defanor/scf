@@ -21,6 +21,7 @@ Currently those are prototypes (i.e., are rather messy and there's not
 much of error handling), not for real usage yet; going to refine once
 will be sure about the format.
 
+
 ### scf-json ###
 
 A generic tool to perform various operations on the used JSON
@@ -32,13 +33,43 @@ of JSON objects.
 A feed reader; currently only Atom is supported, though it should be
 easy to add others (the used library supports them already).
 
+```
+| JSON    | feed                   |
+|---------+------------------------|
+| from    | email, uri, or name    |
+| thread  | feed id                |
+| id      | entry id               |
+| subject | entry title            |
+| message | text summary and links |
+```
+
 ### scf-irc ###
 
 An IRC client.
 
+```
+| JSON    | IRC             |
+|---------+-----------------|
+| to      | nick or channel |
+| from    | nick            |
+| message | message         |
+| thread  | channel         |
+```
+
 ### scf-xmpp ###
 
 An XMPP client.
+
+```
+| JSON    | XMPP      |
+|---------+-----------|
+| message | message   |
+| to      | to        |
+| from    | from      |
+| id      | id        |
+| thread  | thread id |
+| subject | subject   |
+```
 
 
 ## Example ##

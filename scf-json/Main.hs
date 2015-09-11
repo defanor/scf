@@ -77,6 +77,15 @@ filter' ["eq", k, v] o = keyFilter (== (String v)) o k
 filter' ["neq", k, v] o = keyFilter (/= (String v)) o k
 filter' ["with", k] o = if member k o then pure o else mempty
 filter' ["without", k] o = if member k o then mempty else pure o
+filter' ("msg":xs) o = if checkMsg xs msg then pure o else Nothing
+  where
+    msg :: T.Text
+    msg = case H.lookup "message" o of
+      Just (String s) -> s
+      _ -> ""
+    checkMsg :: [T.Text] -> T.Text -> Bool
+    checkMsg ("not":rest) = not . checkMsg rest
+    checkMsg ["prefix", p] = T.isPrefixOf p
 filter' _ o = pure o
 
 
