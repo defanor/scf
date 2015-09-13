@@ -5,14 +5,16 @@ import Data.Aeson
 import Pipes
 import Pipes.Aeson as PA
 import qualified Pipes.ByteString as PBS
-import Control.Applicative
+import Control.Applicative hiding ((<|>))
 import Control.Monad.State.Strict
 import Network
 import Control.Concurrent
 import Control.Concurrent.Chan
 import GHC.IO.Handle
--- import  Data.Attoparsec
-import Data.Attoparsec.ByteString.Char8
+import Text.Parsec.String
+import Text.Parsec.Char
+import Text.Parsec.Combinator
+import Text.Parsec
 import qualified Data.ByteString.Char8 as BS
 import Data.List
 import qualified Data.ByteString.Lazy.Char8 as BL
@@ -63,29 +65,32 @@ printIRCMsg (IRCMsg pref c p) = prefix ++ c ++ " " ++ intercalate " " (map param
       Just (Server pr) -> ':' : pr ++ " "
 
 pMiddle :: Parser String
-pMiddle = some . satisfy $ not . isSpace
+pMiddle = manyTill anyChar (choice [string " ", string "\r\n"] *> pure ())
 
 pTrailing :: Parser String
-pTrailing = many . satisfy $ notInClass "\r\n"
+pTrailing = (manyTill anyChar $ string "\r\n")
+            <?> "trailing"
 
-pParams :: Parser [String]
-pParams = (space *> ((pure <$> (char ':' *> pTrailing)) <|> ((:) <$> pMiddle <*> pParams))
-           <|> pure [])
+pParam :: Parser String
+pParam = choice [char ':' *> pTrailing,
+                 pMiddle]
+         <?> "parameter"
 
 pCommand :: Parser String
-pCommand = pMiddle
+pCommand = pMiddle <?> "command"
 
 pPrefix :: Parser Prefix
-pPrefix = User <$> ((some . satisfy $ notInClass "\r\n !") <* (char '!' *> pMiddle))
-          <|> Server <$> pMiddle
+pPrefix = char ':'
+           *> choice [User <$> ((some $ noneOf "\r\n !") <* (char '!' *> pMiddle)),
+                      Server <$> pMiddle]
+          <?> "prefix"
 
 pMessage :: Parser IRCMsg
 pMessage = IRCMsg
-           <$> ((char ':' *> (Just <$> pPrefix) <* space) <|> (pure Nothing))
+           <$> optionMaybe pPrefix
            <*> pCommand
-           <*> pParams
-           <*  string "\r\n"
-
+           <*> Text.Parsec.many (Text.Parsec.try pParam)
+           <?> "message"
 
 readJson :: Chan (Either Msg IRCMsg) -> Producer PBS.ByteString IO x -> IO ()
 readJson c p = do
@@ -102,8 +107,8 @@ readIRC :: Chan (Either Msg IRCMsg) -> Handle -> IO ()
 readIRC c h = do
   r :: Either SomeException () <- E.try $ do
     line <- hGetLine h
-    case parseOnly pMessage (BS.pack $ line ++ "\n") of
-      Left e -> putStrLn e
+    case parse pMessage "message" (line ++ "\n") of
+      Left e -> putStrLn $ show e
       Right m -> writeChan c (Right m)
   case r of
     Left err -> pure ()
@@ -183,6 +188,7 @@ ircd :: Int -> Chan (Either Msg IRCMsg) -> IO ()
 ircd p c = do
   s <- listenOn (PortNumber $ fromIntegral p)
   (h, hn, pn) <- accept s
+  hSetEncoding h utf8
   msgProcessor <- forkIO $ processor c hn h (St "" "" HM.empty)
   readIRC c h
   sClose s
