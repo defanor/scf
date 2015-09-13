@@ -21,7 +21,6 @@ Currently those are prototypes (i.e., are rather messy and there's not
 much of error handling), not for real usage yet; going to refine once
 will be sure about the format.
 
-
 ### scf-json ###
 
 A generic tool to perform various operations on the used JSON
@@ -56,6 +55,19 @@ An IRC client.
 | thread  | channel         |
 ```
 
+### scf-ircd ###
+
+A single-user IRC server.
+
+```
+| JSON    | IRC             |
+|---------+-----------------|
+| to      | nick or channel |
+| from    | user            |
+| thread  | channel         |
+| message | message         |
+```
+
 ### scf-xmpp ###
 
 An XMPP client.
@@ -72,12 +84,15 @@ An XMPP client.
 ```
 
 
-## Example ##
+## Examples ##
+
+
+### irc + xmpp + feed ###
 
 Sending messages from IRC (both private and from channels) to one
 particular JID, answering those from XMPP (either private or to a
 channel, while using a default channel if no target specified), and
-scraping XKCD atom feed, sending notifications via XMPP:
+scraping XKCD Atom feed, sending notifications via XMPP:
 
 ```bash
 cd pipes && mkfifo feed-out xmpp-in xmpp-out irc-in irc-out && cd ..
@@ -91,4 +106,19 @@ scf-irc irc.freenode.net 6697 True scf-irc \#scf-irc < pipes/irc-in > pipes/irc-
 cat pipes/xmpp-out | tee xmpp-out.log | scf-json del to | scf-json extract to ': ' | scf-json add to \#scf-irc > pipes/irc-in &
 # irc + feed → xmpp
 cat pipes/irc-out | tee irc-out.log | scf-json fuse from '<' '> ' | scf-json fuse thread ' ' | tee merge-in.log | scf-json merge <(cat pipes/feed-out) | tee merge-out.log | scf-json set to [jid] | tee xmpp-in.log > pipes/xmpp-in &
+```
+
+
+### ircd + xmpp + feed ###
+
+Using an IRC client for XMPP, and receiving feed updates there (a
+channel per feed):
+
+```bash
+cd pipes && mkfifo feed-out xmpp-in xmpp-out ircd-in ircd-out && cd ..
+scf-feed http://xkcd.com/atom.xml > pipes/feed-out &
+scf-xmpp [host] [login] [password] < pipes/xmpp-in > pipes/xmpp-out &
+scf-ircd 6668 < pipes/ircd-in > pipes/ircd-out &
+cat pipes/xmpp-out | scf-json merge <(cat pipes/feed-out | scf-json set from 'feeds!f@ee.ds' | scf-json fuse subject ": ") > pipes/ircd-in &
+cat pipes/ircd-out | scf-json del from > pipes/xmpp-in &
 ```
