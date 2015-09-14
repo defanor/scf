@@ -21,67 +21,46 @@ Currently those are prototypes (i.e., are rather messy and there's not
 much of error handling), not for real usage yet; going to refine once
 will be sure about the format.
 
+```
+| JSON        | IRC, IRCD       | XMPP      | Mail         | Feed                   |
+|-------------+-----------------+-----------+--------------+------------------------|
+| to          | nick or channel | to        | To           |                        |
+| from        | nick or user    | from      | From         | email, uri, or name    |
+| message     | message         | message   | body         | text summary and links |
+| subject     |                 | subject   | Subject      | entry title            |
+| thread      | channel         | thread id | Mailing-list | feed id                |
+| id          |                 | id        | Message-Id   | entry id               |
+| in-reply-to |                 |           | In-Reply-To  |                        |
+
+```
+
 ### scf-json ###
 
 A generic tool to perform various operations on the used JSON
 structures: adding/removing/changing values, filtering, merging pipes
 of JSON objects.
 
-### scf-feed ###
+### scf-mail ###
 
-A feed reader; currently only Atom is supported, though it should be
-easy to add others (the used library supports them already).
-
-```
-| JSON    | feed                   |
-|---------+------------------------|
-| from    | email, uri, or name    |
-| thread  | feed id                |
-| id      | entry id               |
-| subject | entry title            |
-| message | text summary and links |
-```
+IMAP and SMTP clients (over TLS, but certificate validation is turned
+off for now). Fetches only new letters via IMAP.
 
 ### scf-irc ###
 
 An IRC client.
 
-```
-| JSON    | IRC             |
-|---------+-----------------|
-| to      | nick or channel |
-| from    | nick            |
-| message | message         |
-| thread  | channel         |
-```
-
 ### scf-ircd ###
 
 A single-user IRC server.
-
-```
-| JSON    | IRC             |
-|---------+-----------------|
-| to      | nick or channel |
-| from    | user            |
-| thread  | channel         |
-| message | message         |
-```
 
 ### scf-xmpp ###
 
 An XMPP client.
 
-```
-| JSON    | XMPP      |
-|---------+-----------|
-| message | message   |
-| to      | to        |
-| from    | from      |
-| id      | id        |
-| thread  | thread id |
-| subject | subject   |
-```
+### scf-feed ###
+
+A feed reader; currently only Atom is supported, though it should be
+easy to add others (the used library supports them already).
 
 
 ## Examples ##
