@@ -100,7 +100,7 @@ readJson c p = do
     Just r' -> case r' of
       Left err -> readJson c p -- parse error, ignore garbage
       Right m -> do
-        writeChan c (Left m)
+        mapM_ (\line -> writeChan c (Left m { message = line })) . lines $ message m
         readJson c p'
 
 readIRC :: Chan (Either Msg IRCMsg) -> Handle -> IO ()
@@ -159,7 +159,7 @@ processor c hn h s = do
       writeIRC $ IRCMsg server "CAP" ["*", "LS", "incapable of anything"]
       processor c hn h s
     Right (IRCMsg _ "NICK" [nick]) -> processor c hn h $ s { nick = nick }
-    Right (IRCMsg _ "JOIN" [channel]) -> do
+    Right (IRCMsg _ "JOIN" [channel@('#':_)]) -> do
       writeIRC $ IRCMsg user "JOIN" [channel]
       writeIRC $ IRCMsg server "353" [nick s, "@", channel, nick s]
       writeIRC $ IRCMsg server "366" [nick s, channel, "End of /NAMES list."]

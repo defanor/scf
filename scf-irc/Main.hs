@@ -54,7 +54,7 @@ writer irc p = do
       case r' of
         Left err -> putStrLn (show err)
         Right (Msg t m th) -> do
-          sendMsg irc (BS.pack t) (BS.pack m)
+          mapM_ (\line -> sendMsg irc (BS.pack t) (BS.pack line)) (lines m)
           writer irc p'
 
 onMsg :: IrcEvent
