@@ -32,6 +32,8 @@ import qualified GHC.IO.Exception as G
 import Foreign.C.Error (Errno(Errno), ePIPE)
 import Control.Exception as E (throwIO, try)
 
+import System.Process
+
 
 
 keyFilter :: (Value -> Bool) -> Object -> T.Text -> Maybe Object
@@ -127,12 +129,26 @@ merge pipes = do
   performGC
   pure $ Right ()
 
-process :: Monad m => [T.Text] -> Pipe Object Object m (Either e ())
+
+cmd :: T.Text -> String -> [String] -> Object -> IO Object
+cmd fld fp args o = case H.lookup fld o of
+  Just (String fd) -> do
+    (inp,out,err,pid) <- runInteractiveProcess fp args Nothing Nothing
+    mapM_ (flip hSetBinaryMode False) [inp, out, err]
+    hPutStr inp $ T.unpack fd
+    hClose inp
+    ret <- hGetContents out
+    pure $ insert fld (String $ T.pack ret) o
+  _ -> pure o
+
+process :: MonadIO m => [T.Text] -> Pipe Object Object m (Either e ())
 process args = do
   obj <- await
-  case filter' args $ translate args obj of
-    Nothing -> pure ()
-    Just v -> yield v
+  case args of
+    ("cmd":fld:fp:args) -> liftIO (cmd fld (T.unpack fp) (map T.unpack args) obj) >>= yield
+    _ -> case filter' args $ translate args obj of
+      Nothing -> pure ()
+      Just v -> yield v
   process args
 
 
