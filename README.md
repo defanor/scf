@@ -1,8 +1,8 @@
 # SCF #
 
-This is a set of communication-related programs, which can easily be
-pipelined, allowing to set various transports, notifications and
-redirects.
+This is a collection of communication-related programs, which can
+easily be pipelined, allowing to set various transports, notifications
+and redirects.
 
 The structure which they share is currently a subset of JSON: only
 key-value, with values being strings. It will allow to translate
@@ -39,6 +39,10 @@ will be sure about the format.
 A generic tool to perform various operations on the used JSON
 structures: adding/removing/changing values, filtering, merging pipes
 of JSON objects.
+
+### scf-group ###
+
+Basic group chats.
 
 ### scf-mail ###
 
