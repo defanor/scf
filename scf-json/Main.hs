@@ -33,7 +33,7 @@ import Foreign.C.Error (Errno(Errno), ePIPE)
 import Control.Exception as E (throwIO, try)
 
 import System.Process
-
+import System.Exit
 
 
 keyFilter :: (Value -> Bool) -> Object -> T.Text -> Maybe Object
@@ -130,7 +130,7 @@ merge pipes = do
   pure $ Right ()
 
 
-cmd :: T.Text -> String -> [String] -> Object -> IO Object
+cmd :: T.Text -> String -> [String] -> Object -> IO (ExitCode, Object)
 cmd fld fp args o = case H.lookup fld o of
   Just (String fd) -> do
     (inp,out,err,pid) <- runInteractiveProcess fp args Nothing Nothing
@@ -138,14 +138,21 @@ cmd fld fp args o = case H.lookup fld o of
     hPutStr inp $ T.unpack fd
     hClose inp
     ret <- hGetContents out
-    pure $ insert fld (String $ T.pack ret) o
-  _ -> pure o
+    code <- waitForProcess pid
+    pure $ (code, insert fld (String $ T.pack ret) o)
+  _ -> pure (ExitSuccess, o)
 
 process :: MonadIO m => [T.Text] -> Pipe Object Object m (Either e ())
 process args = do
   obj <- await
   case args of
-    ("cmd":fld:fp:args) -> liftIO (cmd fld (T.unpack fp) (map T.unpack args) obj) >>= yield
+    ("cmd":flags:fld:fp:args) -> do
+      (code, o) <- liftIO (cmd fld (T.unpack fp) (map T.unpack args) obj)
+      let fs = T.unpack flags
+      case (code == ExitSuccess || not ('f' `elem` fs), 'r' `elem` fs) of
+        (True, True) -> yield o
+        (True, False) -> yield obj
+        _ -> pure ()
     _ -> case filter' args $ translate args obj of
       Nothing -> pure ()
       Just v -> yield v
