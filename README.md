@@ -105,3 +105,29 @@ scf-ircd 6668 < pipes/ircd-in > pipes/ircd-out &
 cat pipes/xmpp-out | scf-json merge <(cat pipes/feed-out | scf-json set from 'feeds!f@ee.ds' | scf-json fuse subject ": ") > pipes/ircd-in &
 cat pipes/ircd-out | scf-json del from > pipes/xmpp-in &
 ```
+
+
+### group + irc + mail ###
+
+Group chat (mailing list) between mail and IRC.
+
+```bash
+# group
+scf-group < pipes/group-in > pipes/group-out &
+# irc
+scf-irc irc.freenode.net 6697 True scf-irc \#scf-irc < pipes/irc-in > pipes/irc-out &
+# mail
+scf-mail uberspace.net groupchat [password] INBOX < pipes/mail-in > pipes/mail-out &
+# mail to group
+cat pipes/mail-out | scf-json cmd r from sed 's/\(.\)/mail:\1/' > pipes/mail-to-group &
+# group to mail
+cat pipes/group-to-mail | scf-json cmd f to grep '^mail:' | scf-json cmd r to sed 's/mail://' | scf-json fuse from ": " | scf-json set from 'groupchat@uberspace.net' > pipes/mail-in &
+# irc to group
+cat pipes/irc-out | scf-json cmd r from sed 's/\(.\)/irc:\1/' > pipes/irc-to-group &
+# group to irc
+cat pipes/group-to-irc | scf-json cmd f to grep '^irc:' | scf-json cmd r to sed 's/irc://' | scf-json fuse from ": " > pipes/irc-in &
+# group → mail + irc
+cat pipes/group-out | tee pipes/group-to-mail > pipes/group-to-irc &
+# irc + mail → group
+cat pipes/irc-to-group | scf-json merge pipes/mail-to-group > pipes/group-in &
+```
