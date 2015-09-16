@@ -41,6 +41,7 @@ data Letter = Letter { lMessage :: String
                      , lID :: Maybe String
                      , lInReplyTo :: Maybe String
                      , lML :: Maybe String
+                     , lDate :: Maybe String
                      } deriving (Show)
 
 instance FromJSON Letter where
@@ -52,18 +53,20 @@ instance FromJSON Letter where
                          <*> v .:? "id"
                          <*> v .:? "in-reply-to"
                          <*> v .:? "thread"
+                         <*> v .:? "date"
   parseJSON _ = mzero
 
 
 instance ToJSON Letter where
-  toJSON (Letter msg to from subj id irt ml) =
+  toJSON (Letter msg to from subj id irt ml date) =
     object ["to" .= to,
             "from" .= from,
             "subject" .= subj,
             "message" .= msg,
             "id" .= id,
             "in-reply-to" .= irt,
-            "thread" .= ml]
+            "thread" .= ml,
+            "date" .= date]
 
 mkLetter :: ([(String, String)], String) -> Maybe Letter
 mkLetter (h, m) = compose <$> lookup "To" h
@@ -73,8 +76,8 @@ mkLetter (h, m) = compose <$> lookup "To" h
     c s = case dropWhile (/= '<') s of
       [] -> s
       st -> takeWhile (/= '>') $ tail st
-    compose to = Letter m (c to) (c <$> l "From") (l "Subject")
-                 (c <$> l "Message-Id") (c <$> l "In-Reply-To") (l "Mailing-list")
+    compose to = Letter m (c to) (c <$> l "From") (l "Subject") (c <$> l "Message-Id")
+                 (c <$> l "In-Reply-To") (l "Mailing-list") (l "Date")
 
 pHeader :: Parser (String, String)
 pHeader = (,)
@@ -124,12 +127,18 @@ sendLetter host user pass l =
     headers = BS.intercalate "\r\n" .
               map (\(x,y) -> BS.concat [x, ": ", BS.pack y]) .
               filter ((/= "") . snd) $
-              [("To", lTo l),
-               ("From", maybe from id (lFrom l)),
-               ("Subject", maybe "no subject" id (lSubject l)),
-               ("Message-Id", maybe "" id (lID l)),
-               ("In-Reply-To", maybe "" id (lInReplyTo l)),
-               ("Mailing-list", maybe "" id (lML l))]
+              [("Date", fromMaybe "" (lDate l)),
+               ("Message-Id", maybe "" (\x -> '<':x ++ ">") (lID l)),
+               ("To", lTo l),
+               ("Subject", fromMaybe "no subject" (lSubject l)),
+               ("From", fromMaybe from (lFrom l)),
+               ("X-Mailer", "scf-mail"),
+               ("Mime-Version", "1.0"),
+               -- todo: utf-8, quoted-printable, use mime properly
+               ("Content-Type", "Text/Plain; charset=us-ascii"),
+               ("Content-Transfer-Encoding", "7bit"),
+               ("In-Reply-To", maybe "" (\x -> '<':x ++ ">") (lInReplyTo l)),
+               ("Mailing-list", fromMaybe "" (lML l))]
 
 readJson :: String -> UserName -> Password -> Producer PBS.ByteString IO x -> IO ()
 readJson host user pass p = do
