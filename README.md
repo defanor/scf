@@ -109,7 +109,7 @@ cat pipes/ircd-out | scf-json del from > pipes/xmpp-in &
 
 ### group + irc + mail ###
 
-Group chat (mailing list) between mail and IRC.
+Group chat (mailing list) between mail and IRC:
 
 ```bash
 # group
@@ -131,3 +131,5 @@ cat pipes/group-out | tee pipes/group-to-mail > pipes/group-to-irc &
 # irc + mail → group
 cat pipes/irc-to-group | scf-json merge pipes/mail-to-group > pipes/group-in &
 ```
+
+(an [approximate illustration](group-mail-irc.svg) of that)
