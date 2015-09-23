@@ -35,6 +35,8 @@ import Control.Exception as E (throwIO, try)
 import System.Process
 import System.Exit
 
+import Codec.Binary.UTF8.String
+
 
 keyFilter :: (Value -> Bool) -> Object -> T.Text -> Maybe Object
 keyFilter f o k = H.lookup k o >>=
@@ -114,7 +116,7 @@ inp = view AU.decoded
 
 fromFile :: (MonadIO m, MonadSafe m) => FilePath ->
             Producer Object m (Either (DecodingError, Producer BS.ByteString m ()) ())
-fromFile fp = inp $ for (PSP.readFile fp) (yield . BS.pack)
+fromFile fp = inp $ for (PSP.readFile fp) (yield . BS.pack . utf8Encode)
 
 runConsumer :: Output o -> (Producer o (SafeT IO) (Either e r)) -> IO ThreadId
 runConsumer o p = forkIO $ do

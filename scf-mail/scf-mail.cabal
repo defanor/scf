@@ -25,11 +25,15 @@ executable scf-mail
                      , aeson-pretty >=0.7 && <0.8
                      , base >=4.7 && <4.8
                      , bytestring >=0.10 && <0.11
+                     , mime
+                     , iconv
+                     , utf8-string
                      , mtl >= 2.1.3.1
                      , network >= 2.4.2.3
                      , parsec >=3.1 && <3.2
                      , pipes >= 4.1.6
                      , pipes-aeson >=0.4 && <0.5
                      , pipes-bytestring >=2.1 && <2.2
+                     , text >= 1.1.0.0
   -- hs-source-dirs:      
   default-language:    Haskell2010

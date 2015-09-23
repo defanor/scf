@@ -29,6 +29,8 @@ import Data.Time.Clock.POSIX
 
 import Control.Concurrent
 
+import Codec.Binary.UTF8.String
+
 
 data Msg = Msg { who :: String
                , message :: String
@@ -54,7 +56,7 @@ writer irc p = do
       case r' of
         Left err -> putStrLn (show err)
         Right (Msg t m th) -> do
-          mapM_ (\line -> sendMsg irc (BS.pack t) (BS.pack line)) (lines m)
+          mapM_ (\line -> sendMsg irc (BS.pack $ utf8Encode t) (BS.pack $ utf8Encode line)) (lines m)
           writer irc p'
 
 onMsg :: IrcEvent
@@ -65,7 +67,7 @@ onMsg = Privmsg $ \irc m -> case mNick m of
                  then Nothing
                  else BS.unpack <$> mChan m
     BL.putStrLn . encodePretty $
-      Msg (BS.unpack n) (filter (not . isControl) . BS.unpack $ mMsg m) thread
+      Msg (BS.unpack n) (decodeString $ BS.unpack $ mMsg m) thread
     hFlush stdout
   Nothing -> putStrLn $ show m
 

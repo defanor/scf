@@ -27,11 +27,19 @@ import Pipes
 import Pipes.Aeson as PA
 import qualified Pipes.ByteString as PBS
 import qualified Data.ByteString.Lazy.Char8 as BL
+import qualified Data.ByteString.Char8 as BS
 import Control.Monad.State.Strict
 
 import System.IO
 import System.Environment
 import Numeric
+
+import Codec.MIME.Parse as MP
+import Codec.MIME.Type as MT
+import qualified Data.Text as T
+import Codec.Text.IConv
+import qualified Codec.MIME.QuotedPrintable as QP
+import Codec.Binary.UTF8.String
 
 
 data Letter = Letter { lMessage :: String
@@ -68,36 +76,36 @@ instance ToJSON Letter where
             "thread" .= ml,
             "date" .= date]
 
-mkLetter :: ([(String, String)], String) -> Maybe Letter
-mkLetter (h, m) = compose <$> lookup "To" h
+parseLetter :: BS.ByteString -> Maybe Letter
+parseLetter s = letter <$> msg <*> h "to"
   where
-    l = flip lookup h
-    c :: String -> String
-    c s = case dropWhile (/= '<') s of
-      [] -> s
-      st -> takeWhile (/= '>') $ tail st
-    compose to = Letter m (c to) (c <$> l "From") (l "Subject") (c <$> l "Message-Id")
-                 (c <$> l "In-Reply-To") (l "Mailing-list") (l "Date")
-
-pHeader :: Parser (String, String)
-pHeader = (,)
-          <$> (manyTill (noneOf ": ") (string ": "))
-          <*> manyTill anyChar (try (string "\r\n" >> lookAhead (noneOf "\t")))
-
-pMessage :: Parser ([(String, String)], String)
-pMessage = (,)
-           <$> ((many (try pHeader)) <* string "\r\n")
-           <*> many anyChar
+    letter msg to = Letter msg (strip to) (strip <$> h "from") (h "subject")
+                    (strip <$> h "message-id") (strip <$> h "in-reply-to")
+                    (h "mailing-list") (h "date")
+    msg = decodeString . filter (/= '\r')
+          <$> case (mime_val_type mime, mime_val_content mime) of
+      (MT.Type _ [MIMEParam "charset" c], Single s) ->
+        case (c, convertStrictly (T.unpack $ T.toUpper c) "UTF-8" (t2bl s)) of
+          ("utf-8", _) -> Just $ T.unpack s
+          (_, Left bl) -> Just $ BL.unpack bl
+          _ -> Just $ (T.unpack $ T.toUpper c)
+      _ -> Nothing
+    t2bl = BL.pack . T.unpack
+    bs2t = T.pack . BS.unpack
+    mime = parseMIMEMessage $ bs2t s
+    h s = T.unpack . paramValue
+          <$> (listToMaybe $ filter (\x -> paramName x == s) (mime_val_headers mime))
+    strip s = case dropWhile (/= '<') s of
+          [] -> s
+          st -> takeWhile (/= '>') $ tail st
 
 fetchNew :: IMAPConnection -> MailboxName -> IO [Letter]
 fetchNew c mb = do
   select c mb
   new <- search c [NEWs]
   raw <- mapM (fetch c) new
-  let parsed = map (parse pMessage "letter") raw
   -- todo: log error messages here
-  pure . catMaybes . map mkLetter $ rights parsed
-
+  pure $ catMaybes $ map parseLetter raw
 
 readLetters :: String -> UserName -> Password -> MailboxName -> IO ()
 readLetters host user pass mailbox = forever . tryse $ do
@@ -123,7 +131,7 @@ sendLetter host user pass l =
       sendMail from [lTo l] msg smtp
   where
     from = user ++ "@" ++ host
-    msg = BS.concat [headers, "\r\n\r\n", BS.pack (lMessage l)]
+    msg = BS.concat [headers, "\r\n\r\n", BS.pack (QP.encode . utf8Encode $ lMessage l)]
     headers = BS.intercalate "\r\n" .
               map (\(x,y) -> BS.concat [x, ": ", BS.pack y]) .
               filter ((/= "") . snd) $
@@ -134,9 +142,8 @@ sendLetter host user pass l =
                ("From", fromMaybe from (lFrom l)),
                ("X-Mailer", "scf-mail"),
                ("Mime-Version", "1.0"),
-               -- todo: utf-8, quoted-printable, use mime properly
-               ("Content-Type", "Text/Plain; charset=us-ascii"),
-               ("Content-Transfer-Encoding", "7bit"),
+               ("Content-Type", "Text/Plain; charset=utf-8"),
+               ("Content-Transfer-Encoding", "quoted-printable"),
                ("In-Reply-To", maybe "" (\x -> '<':x ++ ">") (lInReplyTo l)),
                ("Mailing-list", fromMaybe "" (lML l))]
 
