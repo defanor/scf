@@ -1,21 +1,20 @@
 digraph group_mail_irc {
         group [shape=box,label="scf-group"]
         mail [shape=box,label="scf-mail uberspace.net groupchat [password] INBOX"]
-        mail_add_from [label="scf-json cmd r from sed 's/\(.\)/mail:\1/'"]
+        mail_add_from [label="scf-json cmd r from sed 's/\(.\)/mail:\\1/'"]
         mail_filter_from [label="scf-json cmd f to grep '^mail:'"]
         mail_strip_from [label="scf-json cmd r to sed 's/mail://'"]
-        mail_set_from [label="scf-json set from 'groupchat@uberspace.net'"]
         irc [shape=box,label="scf-irc irc.freenode.net 6697 True scf-irc \#scf-irc"]
-        irc_add_from [label="scf-json cmd r from sed 's/\(.\)/irc:\1/'"]
+        irc_add_from [label="scf-json cmd r from sed 's/\(.\)/irc:\\1/'"]
         irc_filter_from [label="scf-json cmd f to grep '^irc:'"]
         irc_strip_from [label="scf-json cmd r to sed 's/irc://'"]
-        fuse_from [label="scf-json fuse from ': '"]
+        fuse_from [label="scf-json fuse from '<' '> '"]
         copy [label="tee"]
         merge [label="scf-json merge"]
 
         mail -> mail_add_from -> merge
         irc -> irc_add_from -> merge
-        merge -> fuse_from -> group -> copy
+        merge -> group -> fuse_from -> copy
         copy -> irc_filter_from -> irc_strip_from -> irc
-        copy -> mail_filter_from -> mail_strip_from -> mail_set_from -> mail
+        copy -> mail_filter_from -> mail_strip_from -> mail
 }

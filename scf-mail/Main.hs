@@ -138,14 +138,15 @@ sendLetter host user pass l =
               [("Date", fromMaybe "" (lDate l)),
                ("Message-Id", maybe "" (\x -> '<':x ++ ">") (lID l)),
                ("To", lTo l),
-               ("Subject", fromMaybe "no subject" (lSubject l)),
+               ("Subject", fromMaybe "" (lSubject l)),
                ("From", fromMaybe from (lFrom l)),
+               ("Sender", from),
                ("X-Mailer", "scf-mail"),
                ("Mime-Version", "1.0"),
-               ("Content-Type", "Text/Plain; charset=utf-8"),
+               ("Content-Type", "text/plain; charset=utf-8"),
                ("Content-Transfer-Encoding", "quoted-printable"),
                ("In-Reply-To", maybe "" (\x -> '<':x ++ ">") (lInReplyTo l)),
-               ("Mailing-list", fromMaybe "" (lML l))]
+               ("List-ID", fromMaybe "" (lML l))]
 
 readJson :: String -> UserName -> Password -> Producer PBS.ByteString IO x -> IO ()
 readJson host user pass p = do

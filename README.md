@@ -28,7 +28,7 @@ will be sure about the format.
 | from        | nick or user    | from      | From         | email, uri, or name    |
 | message     | message         | message   | body         | text summary and links |
 | subject     |                 | subject   | Subject      | entry title            |
-| thread      | channel         | thread id | Mailing-list | feed id                |
+| thread      | channel         | thread id | List-ID      | feed id                |
 | id          |                 | id        | Message-Id   | entry id               |
 | in-reply-to |                 |           | In-Reply-To  |                        |
 
@@ -121,13 +121,13 @@ scf-mail uberspace.net groupchat [password] INBOX < pipes/mail-in > pipes/mail-o
 # mail to group
 cat pipes/mail-out | scf-json cmd r from sed 's/\(.\)/mail:\1/' > pipes/mail-to-group &
 # group to mail
-cat pipes/group-to-mail | scf-json cmd f to grep '^mail:' | scf-json cmd r to sed 's/mail://' | scf-json fuse from ": " | scf-json set from 'groupchat@uberspace.net' > pipes/mail-in &
+cat pipes/group-to-mail | scf-json cmd f to grep '^mail:' | scf-json cmd r to sed 's/mail://' > pipes/mail-in &
 # irc to group
 cat pipes/irc-out | scf-json cmd r from sed 's/\(.\)/irc:\1/' > pipes/irc-to-group &
 # group to irc
-cat pipes/group-to-irc | scf-json cmd f to grep '^irc:' | scf-json cmd r to sed 's/irc://' | scf-json fuse from ": " > pipes/irc-in &
+cat pipes/group-to-irc | scf-json cmd f to grep '^irc:' | scf-json cmd r to sed 's/irc://' > pipes/irc-in &
 # group → mail + irc
-cat pipes/group-out | tee pipes/group-to-mail > pipes/group-to-irc &
+cat pipes/group-out | scf-json fuse from "<" "> " | tee pipes/group-to-mail > pipes/group-to-irc &
 # irc + mail → group
 cat pipes/irc-to-group | scf-json merge pipes/mail-to-group > pipes/group-in &
 ```
