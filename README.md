@@ -70,28 +70,6 @@ easy to add others (the used library supports them already).
 ## Examples ##
 
 
-### irc + xmpp + feed ###
-
-Sending messages from IRC (both private and from channels) to one
-particular JID, answering those from XMPP (either private or to a
-channel, while using a default channel if no target specified), and
-scraping XKCD Atom feed, sending notifications via XMPP:
-
-```bash
-cd pipes && mkfifo feed-out xmpp-in xmpp-out irc-in irc-out && cd ..
-# atom feeds
-scf-feed http://xkcd.com/atom.xml > pipes/feed-out &
-# xmpp
-scf-xmpp [host] [login] [password] < pipes/xmpp-in > pipes/xmpp-out &
-# irc
-scf-irc irc.freenode.net 6697 True scf-irc \#scf-irc < pipes/irc-in > pipes/irc-out &
-# xmpp → irc
-cat pipes/xmpp-out | tee xmpp-out.log | scf-json del to | scf-json extract to ': ' | scf-json add to \#scf-irc > pipes/irc-in &
-# irc + feed → xmpp
-cat pipes/irc-out | tee irc-out.log | scf-json fuse from '<' '> ' | scf-json fuse thread ' ' | tee merge-in.log | scf-json merge <(cat pipes/feed-out) | tee merge-out.log | scf-json set to [jid] | tee xmpp-in.log > pipes/xmpp-in &
-```
-
-
 ### ircd + xmpp + feed ###
 
 Using an IRC client for XMPP, and receiving feed updates there (a
@@ -107,29 +85,29 @@ cat pipes/ircd-out | scf-json del from > pipes/xmpp-in &
 ```
 
 
-### group + irc + mail ###
+### group + irc + mail + xmpp ###
 
-Group chat (mailing list) between mail and IRC:
+Group chat (mailing list) between mail, IRC and XMPP:
 
 ```bash
-# group
-scf-group < pipes/group-in > pipes/group-out &
-# irc
-scf-irc irc.freenode.net 6697 True scf-irc \#scf-irc < pipes/irc-in > pipes/irc-out &
-# mail
-scf-mail uberspace.net groupchat [password] INBOX < pipes/mail-in > pipes/mail-out &
-# mail to group
-cat pipes/mail-out | scf-json cmd r from sed 's/\(.\)/mail:\1/' > pipes/mail-to-group &
-# group to mail
-cat pipes/group-to-mail | scf-json cmd f to grep '^mail:' | scf-json cmd r to sed 's/mail://' > pipes/mail-in &
-# irc to group
-cat pipes/irc-out | scf-json cmd r from sed 's/\(.\)/irc:\1/' > pipes/irc-to-group &
-# group to irc
-cat pipes/group-to-irc | scf-json cmd f to grep '^irc:' | scf-json cmd r to sed 's/irc://' > pipes/irc-in &
-# group → mail + irc
-cat pipes/group-out | scf-json fuse from "<" "> " | tee pipes/group-to-mail > pipes/group-to-irc &
-# irc + mail → group
-cat pipes/irc-to-group | scf-json merge pipes/mail-to-group > pipes/group-in &
-```
+#!/bin/bash
 
-(an [approximate illustration](group-mail-irc.svg) of that)
+function prepare {
+    test -p pipes/$1-in || mkfifo pipes/$1-in
+    test -p pipes/$1-out || mkfifo pipes/$1-out
+}
+
+function run {
+    prepare $1 ;
+    cat pipes/$1-in | scf-json cmd f to grep ^$1: | scf-json cmd r to sed s/^$1:// | $2 | scf-json cmd r from sed s/^/$1:/ > pipes/$1-out
+}
+
+run xmpp "scf-xmpp $XMPPHOST $XMPPLOGIN $XMPPPASS" &
+run mail "scf-mail $MAILHOST $MAILLOGIN $MAILPASS $MAILDIR" &
+run irc "scf-irc $IRCHOST $IRCPORT $IRCTLS $IRCNICK $IRCCHANNEL" &
+
+while :; do cat group-control ; done | scf-json merge <(cat pipes/mail-out) <(cat pipes/xmpp-out) <(cat pipes/irc-out) | scf-group | scf-json fuse from '<' '> ' | tee pipes/xmpp-in pipes/mail-in pipes/irc-in > group-log &
+
+echo "{\"from\": \"irc:$IRCCHANNEL\", \"message\": \"[join]\"}" > group-control
+```
+([an illustration](http://paste.uberspace.net/mail-xmpp-irc.png))
