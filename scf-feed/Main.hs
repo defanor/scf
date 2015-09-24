@@ -4,7 +4,6 @@ import Text.Feed.Import
 import Text.Feed.Types
 import Text.Atom.Feed
 import Data.Aeson
-import Data.Aeson.Encode.Pretty
 import Data.Default
 import Control.Applicative
 import Data.List
@@ -12,6 +11,8 @@ import Control.Concurrent
 import qualified Data.ByteString.Lazy.Char8 as BL
 import System.Environment
 import System.IO
+
+import SCF
 
 data Msg = Msg { mFrom :: Maybe String
                , mThread :: String
@@ -53,7 +54,7 @@ getFeed u = do
 feed :: Msg -> String -> IO ()
 feed m u = do
   a <- takeWhile (/= m) <$> getFeed u
-  mapM_ (BL.putStrLn . encodePretty) a
+  mapM_ prettyJson a
   hFlush stdout
   threadDelay $ 9 * 10 ^ 8 -- 15 minutes
   case a of

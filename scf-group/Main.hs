@@ -23,8 +23,8 @@ processMessage u o f m
       hFlush stdout
       pure u
 
-readJson :: Text -> [Text] -> Producer PBS.ByteString IO x -> IO ()
-readJson last u p = do
+readJson :: [Text] -> Producer PBS.ByteString IO x -> IO ()
+readJson u p = do
   (r, p') <- runStateT PA.decode p
   case r of
     Nothing -> pure ()

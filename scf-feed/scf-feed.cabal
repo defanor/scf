@@ -21,10 +21,10 @@ executable scf-feed
   -- other-extensions:    
   build-depends:       HTTP >=4000.2 && <4000.3
                      , aeson
-                     , aeson-pretty
                      , base >=4.7 && <4.8
                      , bytestring >= 0.10.4.0
                      , data-default
                      , feed
+                     , scf-common
   -- hs-source-dirs:      
   default-language:    Haskell2010

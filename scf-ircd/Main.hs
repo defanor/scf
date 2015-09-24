@@ -2,28 +2,21 @@
 {-# LANGUAGE OverloadedStrings #-}
 
 import Data.Aeson
-import Pipes
-import Pipes.Aeson as PA
-import qualified Pipes.ByteString as PBS
 import Control.Applicative hiding ((<|>))
-import Control.Monad.State.Strict
+import Control.Monad
 import Network
 import Control.Concurrent
-import Control.Concurrent.Chan
-import GHC.IO.Handle
 import Text.Parsec.String
-import Text.Parsec.Char
-import Text.Parsec.Combinator
 import Text.Parsec
 import qualified Data.ByteString.Char8 as BS
 import Data.List
-import qualified Data.ByteString.Lazy.Char8 as BL
-import Data.Aeson.Encode.Pretty
 import Control.Exception as E
 import Data.HashMap.Strict as HM hiding (map)
 import System.IO
 import System.Environment
 import Numeric
+
+import SCF
 
 data Msg = Msg { to :: Maybe String
                , from :: String
@@ -92,16 +85,10 @@ pMessage = IRCMsg
            <*> Text.Parsec.many (Text.Parsec.try pParam)
            <?> "message"
 
-readJson :: Chan (Either Msg IRCMsg) -> Producer PBS.ByteString IO x -> IO ()
-readJson c p = do
-  (r, p') <- runStateT PA.decode p
-  case r of
-    Nothing -> pure ()
-    Just r' -> case r' of
-      Left err -> readJson c p -- parse error, ignore garbage
-      Right m -> do
-        mapM_ (\line -> writeChan c (Left m { message = line })) . lines $ message m
-        readJson c p'
+readJson :: Chan (Either Msg IRCMsg) -> IO (QuitReason ())
+readJson c = withJson $ \m ->
+  mapM_ (\line -> writeChan c (Left m { message = line })) $
+  lines $ message m
 
 readIRC :: Chan (Either Msg IRCMsg) -> Handle -> IO ()
 readIRC c h = do
@@ -123,7 +110,6 @@ data St = St { nick :: String
 -- maintains state
 processor :: Chan (Either Msg IRCMsg) -> HostName -> Handle -> St -> IO ()
 processor c hn h s = do
-  hFlush stdout
   m <- readChan c
   case m of
     Left (Msg t f m Nothing) -> do
@@ -150,10 +136,10 @@ processor c hn h s = do
       writeIRC $ IRCMsg (Just (User f)) "PRIVMSG" [th, m]
       processor c hn h $ s''
     Right (IRCMsg _ "PRIVMSG" [chan@('#':_), msg]) -> do
-      BL.putStrLn . encodePretty $ Msg (Just chan) (nick s) msg (Just chan)
+      prettyJson $ Msg (Just chan) (nick s) msg (Just chan)
       processor c hn h s
     Right (IRCMsg _ "PRIVMSG" [name, msg]) -> do
-      BL.putStrLn . encodePretty $ Msg (Just name) (nick s) msg Nothing
+      prettyJson $ Msg (Just name) (nick s) msg Nothing
       processor c hn h s
     Right (IRCMsg _ "CAP" ["LS"]) -> do
       writeIRC $ IRCMsg server "CAP" ["*", "LS", "incapable of anything"]
@@ -203,7 +189,7 @@ main = do
       [(p, "")] -> do
         c <- newChan
         irc <- forkIO $ ircd p c
-        readJson c PBS.stdin
+        readJson c
         killThread irc
       _ -> putStrLn "failed to parse port"
     _ -> putStrLn "args: port"

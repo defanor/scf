@@ -2,39 +2,17 @@
 
 import Network.Xmpp
 import Network.Xmpp.Internal
-import Data.Default
-import Network.TLS
-import Data.X509.Validation
 import Control.Applicative
 import Control.Monad
-import Data.Monoid
 import Control.Concurrent
-import qualified Data.Text as T
+import Data.Text as T
 
-import qualified Data.ByteString as BS
-import qualified Data.ByteString.Lazy.Char8 as BL
-import           Network.TLS hiding (Version)
-import           Network.TLS.Extra
-import           Network
-
-import Numeric
-
-import Data.Aeson as A
+import Data.Aeson
 import Data.Maybe
-import Data.XML.Types
-
-import Pipes
-import Pipes.Aeson
-import qualified Pipes.ByteString as PBS
-
-import Control.Monad.State.Strict
-import Pipes.Attoparsec
 
 import System.Environment
 
-import Data.Aeson.Encode.Pretty
-
-import System.IO
+import SCF
 
 
 instance FromJSON Jid where
@@ -98,25 +76,14 @@ instance ToJSON Message where
   toJSON = toJSON . decodeMsg
 
 reader :: Session -> IO ()
-reader s = forever $ do
-  msg <- getMessage s
-  BL.putStrLn $ encodePretty msg
-  hFlush stdout
+reader s = forever $ getMessage s >>= prettyJson
 
-writer :: Session -> Producer PBS.ByteString IO x -> IO ()
-writer s p = do
-  (r, p') <- runStateT (Pipes.Aeson.decode :: PBS.Parser PBS.ByteString IO (Maybe (Either DecodingError Message))) p
-  case r of
-    Nothing -> pure ()
-    Just r' -> do
-      case r' of
-        Left err -> putStrLn (show err)
-        Right msg -> do
-          sent <- sendMessage msg s
-          case sent of
-            Right () -> writer s p'
-            Left err -> putStrLn $ show err
-
+writer :: Session -> IO (QuitReason XmppFailure)
+writer s = withJson' SCF.stdin $ \msg -> do
+  sent <- sendMessage msg s
+  pure $ case sent of
+    Right () -> Nothing
+    Left err -> Just err
 
 main :: IO ()
 main = do
@@ -127,8 +94,14 @@ main = do
       case sess' of
         Left f -> putStrLn $ show f
         Right sess -> do
-          _ <- sendPresence presenceOnline sess
-          forkIO $ reader sess
-          writer sess PBS.stdin
+          sendPresence presenceOnline sess
+          rt <- forkIO $ reader sess
+          r <- writer sess
+          -- something happened, clean up
+          sendPresence presenceOffline sess
+          killThread rt
+          endSession sess
+          case r of
+            UM _ -> main -- an XmppFailure, restart
+            _ -> pure () -- either parsing error or EOF, quit
     _ -> putStrLn "args: host, name, pass"
-

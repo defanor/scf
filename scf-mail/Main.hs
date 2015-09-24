@@ -10,11 +10,8 @@ import Network.Socket
 import qualified Data.ByteString.Char8 as BS
 
 import Text.Parsec.ByteString
-import Text.Parsec.Char
-import Text.Parsec.Combinator
 import Text.Parsec
 import Control.Applicative hiding (many)
-import Data.Either
 import Data.Maybe
 
 import qualified Control.Exception as E
@@ -22,17 +19,11 @@ import Control.Monad
 import Control.Concurrent
 
 import Data.Aeson
-import Data.Aeson.Encode.Pretty
-import Pipes
-import Pipes.Aeson as PA
-import qualified Pipes.ByteString as PBS
 import qualified Data.ByteString.Lazy.Char8 as BL
 import qualified Data.ByteString.Char8 as BS
-import Control.Monad.State.Strict
 
 import System.IO
 import System.Environment
-import Numeric
 
 import Codec.MIME.Parse as MP
 import Codec.MIME.Type as MT
@@ -40,6 +31,8 @@ import qualified Data.Text as T
 import Codec.Text.IConv
 import qualified Codec.MIME.QuotedPrintable as QP
 import Codec.Binary.UTF8.String
+
+import SCF
 
 
 data Letter = Letter { lMessage :: String
@@ -113,7 +106,7 @@ readLetters host user pass mailbox = forever . tryse $ do
     IMAP.authenticate c LOGIN user pass
     tryse . forever $ do
       letters <- fetchNew c mailbox
-      mapM_ (BL.putStrLn . encodePretty) letters
+      mapM_ prettyJson letters
       hFlush stdout
       threadDelay $ 2 * 10 ^ 7
     logout c
@@ -148,17 +141,8 @@ sendLetter host user pass l =
                ("In-Reply-To", maybe "" (\x -> '<':x ++ ">") (lInReplyTo l)),
                ("List-ID", fromMaybe "" (lML l))]
 
-readJson :: String -> UserName -> Password -> Producer PBS.ByteString IO x -> IO ()
-readJson host user pass p = do
-  (r, p') <- runStateT PA.decode p
-  case r of
-    Nothing -> pure ()
-    Just r' -> case r' of
-      Left err -> putStrLn (show err)
-      Right l -> do
-        E.try (sendLetter host user pass l) :: IO (Either E.SomeException ())
-        readJson host user pass p'
-
+readJson :: String -> UserName -> Password -> IO (QuitReason (Either E.SomeException ()))
+readJson host user pass = withJson $ E.try . sendLetter host user pass
 
 main :: IO ()
 main = do
@@ -166,5 +150,7 @@ main = do
   case args of
     [host, user, pass, mailbox] -> do
       forkIO $ readLetters host user pass mailbox
-      readJson host user pass PBS.stdin
+      r <- readJson host user pass
+      -- todo: check the result, possibly restart
+      pure ()
     _ -> putStrLn "args: host, user, pass, mailbox"

@@ -1,35 +1,16 @@
 {-# LANGUAGE OverloadedStrings #-}
 import Data.Aeson
-import Pipes
-import Pipes.Aeson
-import qualified Pipes.ByteString as PBS
-import Control.Monad.State.Strict
-import Pipes.Attoparsec
-import qualified Data.ByteString.Lazy.Char8 as BL
+import Control.Monad
 import qualified Data.ByteString.Char8 as BS
-
 import System.Environment
-
-import Data.Aeson.Encode.Pretty
-
 import Control.Applicative
-import Data.HashMap.Strict as H hiding (map, filter)
-
-import qualified Data.Text as T
-
-import Data.Attoparsec.Text as A hiding (take)
-import Data.Char
-
+import Data.HashMap.Strict
 import Network.SimpleIRC
-
-import System.IO
-import Data.List
-
 import Data.Time.Clock.POSIX
-
 import Control.Concurrent
-
 import Codec.Binary.UTF8.String
+
+import SCF
 
 
 data Msg = Msg { who :: String
@@ -47,17 +28,13 @@ instance FromJSON Msg where
 instance ToJSON Msg where
   toJSON (Msg f m th) = object ["from" .= f, "message" .= m, "thread" .= th]
 
-writer :: MIrc -> Producer PBS.ByteString IO x -> IO ()
-writer irc p = do
-  (r, p') <- runStateT (Pipes.Aeson.decode :: PBS.Parser PBS.ByteString IO (Maybe (Either DecodingError Msg))) p
-  case r of
-    Nothing -> pure ()
-    Just r' -> do
-      case r' of
-        Left err -> putStrLn (show err)
-        Right (Msg t m th) -> do
-          mapM_ (\line -> sendMsg irc (BS.pack $ utf8Encode t) (BS.pack $ utf8Encode line)) (lines m)
-          writer irc p'
+writer :: MIrc -> IO (QuitReason ())
+writer irc = withJson $ \(Msg t m th) -> do
+  mapM_ (\line -> sendMsg
+                  irc
+                  (BS.pack $ utf8Encode t)
+                  (BS.pack $ utf8Encode line))
+    (lines m)
 
 onMsg :: IrcEvent
 onMsg = Privmsg $ \irc m -> case mNick m of
@@ -66,9 +43,7 @@ onMsg = Privmsg $ \irc m -> case mNick m of
     let thread = if mChan m == Just myNick
                  then Nothing
                  else BS.unpack <$> mChan m
-    BL.putStrLn . encodePretty $
-      Msg (BS.unpack n) (decodeString $ BS.unpack $ mMsg m) thread
-    hFlush stdout
+    prettyJson $  Msg (BS.unpack n) (decodeString $ BS.unpack $ mMsg m) thread
   Nothing -> putStrLn $ show m
 
 onDisconnect :: IrcEvent
@@ -101,6 +76,5 @@ main = do
                        [onMsg, onDisconnect, onNumeric] "scf-irc" (pure "time") (3*10^8)) True False
       case irc' of
         Left err -> putStrLn $ show err
-        Right irc -> writer irc PBS.stdin
+        Right irc -> writer irc >> pure ()
     _ -> putStrLn "args: host, port, tls, nick, channels"
-
