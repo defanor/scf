@@ -85,10 +85,10 @@ pMessage = IRCMsg
            <*> Text.Parsec.many (Text.Parsec.try pParam)
            <?> "message"
 
-readJson :: Chan (Either Msg IRCMsg) -> IO (QuitReason ())
-readJson c = withJson $ \m ->
-  mapM_ (\line -> writeChan c (Left m { message = line })) $
-  lines $ message m
+jsonReader :: Chan (Either Msg IRCMsg) -> IO (Either String ())
+jsonReader c = withJson $ \m -> do
+  mapM_ (\line -> writeChan c (Left m { message = line })) $ lines $ message m
+  pure $ Right ()
 
 readIRC :: Chan (Either Msg IRCMsg) -> Handle -> IO ()
 readIRC c h = do
@@ -153,7 +153,7 @@ processor c hn h s = do
     Right (IRCMsg _ "USER" [ident, _, _, name]) -> do
       writeIRC $ IRCMsg server "001" [nick s, "Welcome"]
       writeIRC $ IRCMsg server "002" [nick s, "Your host is " ++ hn ++ ", running scf-ircd"]
-      writeIRC $ IRCMsg server "003" [nick s, "This server was created just now"]
+      writeIRC $ IRCMsg server "003" [nick s, "This server was created once upon a time"]
       writeIRC $ IRCMsg server "004" [nick s, sname ++ " scf-ircd"]
       writeIRC $ IRCMsg server "005" [nick s, "CHANTYPES=# CHARSET=ascii PREFIX=(ov)@+ CHANMODES= MODES=4 NETWORK=scf MAXCHANNELS=42 NICKLEN=42 CASEMAPPING=ascii TOPICLEN=42 CHANNELLEN=42 KICKLEN=42"]
       writeIRC $ IRCMsg server "MODE" [nick s, "+i"]
@@ -189,7 +189,7 @@ main = do
       [(p, "")] -> do
         c <- newChan
         irc <- forkIO $ ircd p c
-        readJson c
+        jsonReader c
         killThread irc
       _ -> putStrLn "failed to parse port"
     _ -> putStrLn "args: port"

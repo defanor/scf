@@ -9,6 +9,7 @@ import Data.Text as T
 
 import Data.Aeson
 import Data.Maybe
+import qualified Data.ByteString as BS
 
 import System.Environment
 
@@ -61,7 +62,8 @@ encodeMsg (Msg m t f i th s) =
   (InstantMessage
    (flip MessageThread Nothing <$> th)
    (MessageSubject Nothing <$> maybeToList s)
-   (MessageBody Nothing <$> maybeToList m))
+   -- filtering '\1', since some XMPP servers drop connection on it
+   (MessageBody Nothing . T.filter (/= '\1') <$> maybeToList m))
 
 decodeMsg :: Message -> Msg
 decodeMsg m@(Message i f t _ _ _ _) = case getIM m of
@@ -78,12 +80,8 @@ instance ToJSON Message where
 reader :: Session -> IO ()
 reader s = forever $ getMessage s >>= prettyJson
 
-writer :: Session -> IO (QuitReason XmppFailure)
-writer s = withJson' SCF.stdin $ \msg -> do
-  sent <- sendMessage msg s
-  pure $ case sent of
-    Right () -> Nothing
-    Left err -> Just err
+writer :: Session -> IO (Either String XmppFailure)
+writer s = withJson $ flip sendMessage s
 
 main :: IO ()
 main = do
@@ -102,6 +100,6 @@ main = do
           killThread rt
           endSession sess
           case r of
-            UM _ -> main -- an XmppFailure, restart
-            _ -> pure () -- either parsing error or EOF, quit
+            Right _ -> main -- an XmppFailure, restart
+            _ -> pure () -- reading error, quit
     _ -> putStrLn "args: host, name, pass"

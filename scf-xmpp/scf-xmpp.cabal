@@ -21,8 +21,9 @@ executable scf-xmpp
   other-extensions:    OverloadedStrings
   build-depends:       aeson >= 0.7.0.4
                      , base >=4.7 && <4.8
+                     , bytestring >= 0.10.4.0
                      , pontarius-xmpp >=0.4 && <0.5
-                     , text >= 1.1.0.0
                      , scf-common
+                     , text >= 1.1.0.0
   -- hs-source-dirs:      
   default-language:    Haskell2010

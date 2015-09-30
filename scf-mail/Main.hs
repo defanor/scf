@@ -141,8 +141,8 @@ sendLetter host user pass l =
                ("In-Reply-To", maybe "" (\x -> '<':x ++ ">") (lInReplyTo l)),
                ("List-ID", fromMaybe "" (lML l))]
 
-readJson :: String -> UserName -> Password -> IO (QuitReason (Either E.SomeException ()))
-readJson host user pass = withJson $ E.try . sendLetter host user pass
+writer :: String -> UserName -> Password -> IO (Either String E.SomeException)
+writer host user pass = withJson $ E.try . sendLetter host user pass
 
 main :: IO ()
 main = do
@@ -150,7 +150,7 @@ main = do
   case args of
     [host, user, pass, mailbox] -> do
       forkIO $ readLetters host user pass mailbox
-      r <- readJson host user pass
+      r <- writer host user pass
       -- todo: check the result, possibly restart
       pure ()
     _ -> putStrLn "args: host, user, pass, mailbox"

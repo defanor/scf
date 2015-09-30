@@ -28,13 +28,14 @@ instance FromJSON Msg where
 instance ToJSON Msg where
   toJSON (Msg f m th) = object ["from" .= f, "message" .= m, "thread" .= th]
 
-writer :: MIrc -> IO (QuitReason ())
+writer :: MIrc -> IO (Either String ())
 writer irc = withJson $ \(Msg t m th) -> do
-  mapM_ (\line -> sendMsg
-                  irc
-                  (BS.pack $ utf8Encode t)
-                  (BS.pack $ utf8Encode line))
-    (lines m)
+      mapM_ (\line -> sendMsg
+                      irc
+                      (BS.pack $ utf8Encode t)
+                      (BS.pack $ utf8Encode line))
+        (lines m)
+      pure $ Right ()
 
 onMsg :: IrcEvent
 onMsg = Privmsg $ \irc m -> case mNick m of
@@ -76,5 +77,8 @@ main = do
                        [onMsg, onDisconnect, onNumeric] "scf-irc" (pure "time") (3*10^8)) True False
       case irc' of
         Left err -> putStrLn $ show err
-        Right irc -> writer irc >> pure ()
+        Right irc -> do
+          writer irc
+          disconnect irc "bye"
+          pure ()
     _ -> putStrLn "args: host, port, tls, nick, channels"

@@ -2,10 +2,7 @@
 
 module SCF (
   -- * Formats
-  module SCF.JSON,
-  -- * General
-  PBS.stdin
+  module SCF.JSON
   ) where
 
 import SCF.JSON
-import qualified Pipes.ByteString as PBS
