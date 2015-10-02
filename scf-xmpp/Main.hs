@@ -6,6 +6,7 @@ import Control.Applicative
 import Control.Monad
 import Control.Concurrent
 import Data.Text as T
+import Control.Exception as E
 
 import Data.Aeson
 import Data.Maybe
@@ -88,7 +89,11 @@ main = do
   args <- getArgs
   case args of
     [host, name, pass] -> do
-      sess' <- session host (simpleAuth (T.pack name) (T.pack pass)) def
+      let reconn s _ = do
+            reconnect' s
+            void $ sendPresence presenceOnline s
+      sess' <- session host (simpleAuth (T.pack name) (T.pack pass)) $
+               def {onConnectionClosed=reconn}
       case sess' of
         Left f -> putStrLn $ show f
         Right sess -> do
@@ -96,9 +101,10 @@ main = do
           rt <- forkIO $ reader sess
           r <- writer sess
           -- something happened, clean up
-          sendPresence presenceOffline sess
-          killThread rt
-          endSession sess
+          (E.try :: IO a -> IO (Either SomeException a)) $ do
+            killThread rt
+            sendPresence presenceOffline sess
+            endSession sess
           case r of
             Right _ -> main -- an XmppFailure, restart
             _ -> pure () -- reading error, quit
