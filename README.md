@@ -46,8 +46,7 @@ Basic group chats.
 
 ### scf-mail ###
 
-IMAP and SMTP clients (over TLS, but certificate validation is turned
-off for now). Fetches only new letters via IMAP.
+IMAP and SMTP clients (over TLS). Fetches only new letters via IMAP.
 
 ### scf-irc ###
 

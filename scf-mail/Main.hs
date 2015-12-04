@@ -102,7 +102,7 @@ fetchNew c mb = do
 
 readLetters :: String -> UserName -> Password -> MailboxName -> IO ()
 readLetters host user pass mailbox = forever . tryse $ do
-    c <- connectIMAPSSLWithSettings host defaultSettingsIMAPSSL {sslDisableCertificateValidation=True}
+    c <- connectIMAPSSLWithSettings host defaultSettingsIMAPSSL
     IMAP.authenticate c LOGIN user pass
     tryse . forever $ do
       letters <- fetchNew c mailbox
@@ -117,8 +117,7 @@ readLetters host user pass mailbox = forever . tryse $ do
 
 sendLetter :: String -> UserName -> Password -> Letter -> IO ()
 sendLetter host user pass l =
-  doSMTPSSLWithSettings host
-  (defaultSettingsSMTPSSL {sslDisableCertificateValidation=True}) $ \smtp -> do
+  doSMTPSSLWithSettings host defaultSettingsSMTPSSL $ \smtp -> do
     authSucceed <- SMTP.authenticate LOGIN user pass smtp
     when authSucceed $ do
       sendMail from [lTo l] msg smtp
